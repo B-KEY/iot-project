@@ -1,0 +1,71 @@
+version: "3.7"
+services:
+  broker:
+    image: "eclipse-mosquitto"
+    container_name: MQTT_broker_self
+    restart: unless-stopped
+    ports:
+      - 1883:1883
+      - 29001:29001
+    volumes:
+      - ./volumes/mqtt/data:/mosquitto/data
+      - ./volumes/mqtt/config:/mosquitto/config
+      - ./volumes/mqtt/log:/mosquitto/log
+  node-red1:
+    image: nodered/node-red
+    container_name: nodered-self
+    restart: unless-stopped
+    ports:
+      - 1880:1880
+    volumes:
+      - ./volumes/node-red1:/data
+      - ./certificates:/certs:ro
+  mongoServer:
+    image: "mongo"
+    command: mongod --logpath /dev/null
+    restart: unless-stopped
+    container_name: mongoServer-self
+    volumes:
+      - ./volumes/mongoDb:/data/db
+  express:
+    image: "mongo-express:latest"
+    container_name: expressDB-self
+    restart: unless-stopped
+    environment:
+      ME_CONFIG_MONGODB_ENABLE_ADMIN: "false"
+      ME_CONFIG_MONGODB_SERVER: mongoServer
+      ME_CONFIG_MONGODB_PORT: 27017
+    ports:
+      - 8081:8081
+    depends_on:
+      - "mongoServer"
+  nginx:
+    restart: always
+    depends_on:
+      - web
+    build:
+      dockerfile: Dockerfile.dev
+      context: ./nginx
+    ports:
+      - "3050:80"
+  web:
+    restart: unless-stopped
+    build:
+      dockerfile: Dockerfile.dev
+      context: ./web
+    environment:
+      - WDS_SOCKET_PORT=0
+    volumes:
+      - /app/node_modules
+      - ./web:/app
+  api:
+    restart: unless-stopped
+    build:
+      dockerfile: Dockerfile.dev
+      context: ./nodeApi
+    environment:
+      - MONGO_DATABASE_URL=mongodb://mongoServer:27017/api
+      - TOKEN_KEY=e3c9cfe5c8c1ceab90fcd9485
+    volumes:
+      - /app/node_modules
+      - ./nodeApi:/app
